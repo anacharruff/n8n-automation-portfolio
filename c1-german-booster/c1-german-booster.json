@@ -1,0 +1,196 @@
+{
+  "name": "Der C1-Booster",
+  "nodes": [
+    {
+      "id": "69d47d9a-8694-4fba-90b2-1bb75ad21840",
+      "name": "Daily at 8:30 AM",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        112
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 8,
+              "triggerAtMinute": 30
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "60cde34a-2a8d-4bc0-a066-9da484927ac8",
+      "name": "C1 Vocabulary Matrix",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        112
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "\nconst concepts = [\n  { term: 'Die Verhandlungsbasis', gloss: 'negotiation basis' },\n  { term: 'Der Wettbewerbsvorteil', gloss: 'competitive advantage' },\n  { term: 'Die Marktdurchdringung', gloss: 'market penetration' },\n  { term: 'Der Meilenstein', gloss: 'milestone' },\n  { term: 'Die Effizienzsteigerung', gloss: 'efficiency increase' },\n];\nconst today = new Date();\nconst dateStr = today.toISOString().slice(0, 10);\nconst dayName = today.toLocaleDateString('de-DE', { weekday: 'long' });\n// Rotate one step per calendar day, then start over\nconst dayNumber = Math.floor(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()) / 86400000);\nconst concept = concepts[dayNumber % concepts.length];\nreturn [\n  {\n    json: {\n      date: dateStr,\n      dayName,\n      concept: concept.term,\n      gloss: concept.gloss,\n    },\n  },\n];\n"
+      }
+    },
+    {
+      "id": "7166a379-36c1-41c2-ab14-514dc851e57f",
+      "name": "C1 German Coach",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        112
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Today is {{ $json.dayName }}, {{ $json.date }}. Today's business concept: {{ $json.concept }} ({{ $json.gloss }}). Create today's C1 German business language boost.",
+        "options": {
+          "systemMessage": "You are an elite German language coach for C1-level business professionals. For each request you receive one high-level German business concept. Produce one daily language boost structured exactly with these sections and headings:\n\nWORD OF THE DAY: the given business concept, with a short English gloss.\n\nIN CONTEXT: one professional, C1-level corporate presentation scenario paragraph in German (4-6 sentences) — e.g. a slide narration, boardroom pitch or quarterly review — in which a native-speaking executive uses the concept organically and persuasively.\n\nYOUR CHALLENGE: one interactive sentence-building challenge: give the learner a concrete business situation and ask them to write a sentence (or short spoken response) using the concept, optionally with a hint. End with an encouraging line inviting them to try.\n\nRules: keep everything at genuine C1 register, formal business German (Sie-Form where people are addressed); authentic corporate tone, no bullet-point overload, readable on a phone."
+        }
+      }
+    },
+    {
+      "id": "4d2efa3a-d412-4830-a041-98eaf313c711",
+      "name": "Anthropic Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.6,
+      "position": [
+        528,
+        336
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-sonnet-5",
+          "cachedResultName": "Claude Sonnet 5"
+        },
+        "options": {
+          "maxTokensToSample": 1500
+        }
+      }
+    },
+    {
+      "id": "bf24850a-722f-4a06-a5f8-47ebd4d4ec56",
+      "name": "Format Daily Language Boost",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        800,
+        112
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "title",
+              "name": "title",
+              "type": "string",
+              "value": "=Der C1-Booster · {{ $(\"C1 Vocabulary Matrix\").item.json.dayName }}, {{ $(\"C1 Vocabulary Matrix\").item.json.date }}"
+            },
+            {
+              "id": "message",
+              "name": "message",
+              "type": "string",
+              "value": "={{ $json.output.trim() }}"
+            },
+            {
+              "id": "date",
+              "name": "date",
+              "type": "string",
+              "value": "={{ $(\"C1 Vocabulary Matrix\").item.json.date }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "0d3825a7-91cb-4684-9861-6c551f1580d2",
+      "name": "Send Daily Email",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        112
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toRecipients": "you@example.com",
+        "subject": "={{ $json.title }}",
+        "bodyContent": "={{ $json.message }}",
+        "additionalFields": {
+          "bodyContentType": "Text"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Daily at 8:30 AM": {
+      "main": [
+        [
+          {
+            "node": "C1 Vocabulary Matrix",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C1 Vocabulary Matrix": {
+      "main": [
+        [
+          {
+            "node": "C1 German Coach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "C1 German Coach": {
+      "main": [
+        [
+          {
+            "node": "Format Daily Language Boost",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "C1 German Coach",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Daily Language Boost": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
