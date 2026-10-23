@@ -1,0 +1,183 @@
+{
+  "name": "An Córas Glic",
+  "nodes": [
+    {
+      "id": "8be4e69f-5a0f-40ad-bff4-f4a4ae52733d",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        112
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 7,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "834a2990-ba96-445f-b39f-236d70029421",
+      "name": "Master Task List",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        112
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const tasks = [\n  { name: 'Clean the windows', energy: 'High', minutes: 15 },\n  { name: 'Deep scrub the shower & toilet', energy: 'High', minutes: 15 },\n  { name: 'Mop the kitchen & living room floors', energy: 'High', minutes: 12 },\n  { name: 'Vacuum the living and master bedroom carpets', energy: 'High', minutes: 12 },\n  { name: 'Wipe down kitchen counters & induction stove', energy: 'Low', minutes: 5 },\n  { name: 'Clean office', energy: 'Medium', minutes: 10 },\n  { name: 'Empty all trash bins & take out recycling', energy: 'Low', minutes: 4 },\n  { name: 'Dust the TV console and coffee table', energy: 'Low', minutes: 5 },\n  { name: 'Wipe down bathroom mirror and sink', energy: 'Low', minutes: 4 },\n  { name: 'Load and start the laundry machine', energy: 'Low', minutes: 6 }\n];\nconst now = new Date();\nconst dayOfWeek = now.toLocaleDateString('en-US', { weekday: 'long' });\nconst dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });\nreturn [{ json: { dayOfWeek, date: dateStr, tasks } }];"
+      }
+    },
+    {
+      "id": "31bed2e1-2cf9-4b53-9a26-3acfd5a5b972",
+      "name": "AI Chore Allocator",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        448,
+        112
+      ],
+      "parameters": {
+        "promptType": "define",
+        "text": "=Today is {{ $json.dayOfWeek }}, {{ $json.date }}.\nHere is the master list of apartment chores as JSON:\n{{ JSON.stringify($json.tasks) }}\n\nSelect which of these chores should be done today.",
+        "options": {
+          "systemMessage": "You are a smart daily chore allocator for a small apartment. Given the current day of the week and a JSON array of chores (each with a name, an energy rating of \"High\", \"Medium\", or \"Low\", and an estimated time in minutes), pick the chores to do today. Rules: (1) The combined estimated time of the selected chores must NOT exceed 20 minutes. (2) At most ONE selected chore may have a \"High\" energy rating. (3) Vary the selection sensibly by day of the week so different chores rotate through the week, while always respecting rules 1 and 2. Respond with ONLY a JSON object of the form {\"selected\": [{\"name\": string, \"energy\": \"High\"|\"Medium\"|\"Low\", \"minutes\": number}], \"totalMinutes\": number, \"reasoning\": string}. No markdown, no code fences."
+        }
+      }
+    },
+    {
+      "id": "faf0818a-62ee-40a9-b2ce-3621c03c8435",
+      "name": "OpenAI Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        528,
+        336
+      ],
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-5.6-terra"
+        }
+      }
+    },
+    {
+      "id": "85ce420d-4da8-489e-b4aa-7797bb9bda62",
+      "name": "Prepare Daily Notification Layout",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        800,
+        112
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "notification",
+              "name": "notification",
+              "type": "string",
+              "value": "={{ (() => {\nconst plan = JSON.parse($('AI Chore Allocator').item.json.output);\nconst day = $('Master Task List').item.json.dayOfWeek;\nconst date = $('Master Task List').item.json.date;\nconst lines = plan.selected.map((t, i) => (i + 1) + '. ' + t.name + ' — ~' + t.minutes + ' min (' + t.energy + ' energy)').join('\\n');\nreturn 'Good morning! Here are your micro-chores for ' + day + ', ' + date + ':\\n\\n' + lines + '\\n\\nTotal: ~' + plan.totalMinutes + ' minutes.\\n' + plan.reasoning;\n})() }}"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "91abc0dc-dbe7-4a53-bf02-b80608a0ac00",
+      "name": "Send Daily Chore Email",
+      "type": "n8n-nodes-base.microsoftOutlook",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        112
+      ],
+      "parameters": {
+        "resource": "message",
+        "operation": "send",
+        "toRecipients": "you@example.com",
+        "subject": "=Your daily chores — {{ $('Master Task List').item.json.dayOfWeek }}, {{ $('Master Task List').item.json.date }}",
+        "bodyContent": "={{ $json.notification }}",
+        "additionalFields": {
+          "bodyContentType": "Text"
+        },
+        "authentication": "microsoftOutlookOAuth2Api"
+      }
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Master Task List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Master Task List": {
+      "main": [
+        [
+          {
+            "node": "AI Chore Allocator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Chore Allocator": {
+      "main": [
+        [
+          {
+            "node": "Prepare Daily Notification Layout",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Chore Allocator",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Daily Notification Layout": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Chore Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "description": "Picks a daily set of apartment chores within a 20-minute budget, with at most one high-effort task, and emails the plan each morning.",
+    "availableInMCP": true
+  },
+  "pinData": {}
+}
