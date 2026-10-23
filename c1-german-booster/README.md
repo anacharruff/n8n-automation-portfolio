@@ -28,4 +28,4 @@ flowchart LR
 1. Import `c1-german-booster.json`.
 2. Add credentials: Anthropic API key and Microsoft Outlook OAuth2.
 3. Set your email address in **Send Daily Email**.
-4. Add more terms to **C1 Vocabulary Matrix**. With the current 5 terms, the cycle repeats every 5 days.
+4. Optionally edit the term list in **C1 Vocabulary Matrix**. It ships with 60 terms, so a full rotation takes about two months.
